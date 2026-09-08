@@ -115,8 +115,6 @@ app.UseAuthorization();
 try
 {
     app.MapControllers();
-    app.MapHub<PQM.Server.Hubs.MeterHub>("/hubs/meter");
-    app.MapHub<PQM.Server.Hubs.DeviceHub>("/hubs/device");
     app.MapFallbackToFile("/index.html");
 
     app.Run();
