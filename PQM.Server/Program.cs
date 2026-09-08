@@ -1,12 +1,13 @@
-using System.IO;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using PQM.Core.Interfaces.Repositories;
 using PQM.Infrastructure;
 using PQM.Infrastructure.Repositories;
 using PQM.Infrastructure.Services;
+using PQM.Server.Hubs;
 using Serilog;
 using Serilog.Events;
+using System.IO;
+using System.Text.Json.Serialization;
 
 string logDirectory = @"C:\PQM\Logs";
 if (!Directory.Exists(logDirectory))
@@ -118,7 +119,8 @@ app.UseAuthorization();
 try
 {
     app.MapControllers();
-    app.MapFallbackToFile("/index.html");
+        app.MapHub<DeviceHub>("/hubs/device");
+        app.MapFallbackToFile("/index.html");
 
     app.Run();
 }
