@@ -25,7 +25,7 @@ namespace PQM.Infrastructure
         public DbSet<DeviceEvent> DeviceEvents { get; set; } = null!;
         public DbSet<DeviceSyncHistory> DeviceSyncHistories { get; set; } = null!;
         public DbSet<DeviceSyncSchedule> DeviceSyncSchedules { get; set; } = null!;
-        public DbSet<DeviceSyncRequest> DeviceSyncRequests { get; set; } = null!;
+        //public DbSet<DeviceSyncRequest> DeviceSyncRequests { get; set; } = null!;
 
         public DataContext(DbContextOptions<DataContext> options) : base(options)
         {

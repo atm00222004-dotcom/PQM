@@ -14,7 +14,7 @@ namespace PQM.Server.Controllers
         private readonly APIResponse _apiResponse;
         private readonly ILogger<DeviceController> _logger;
         private readonly string _connectionString;
-        private readonly PQM.Infrastructure.Services.ProfileSyncService _profileSyncService;
+        private readonly ProfileSyncService _profileSyncService;
 
         public DeviceController(IDeviceRepository deviceRepository,ILogger<DeviceController> logger,IConfiguration configuration,ProfileSyncService profileSyncService)
         {

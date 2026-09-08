@@ -83,8 +83,7 @@ namespace PQM.Console
 
                 // Advance schedule immediately so it is not picked again
                 // during the next 5-second polling cycle.
-                using var advanceCts =
-                    new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var advanceCts =new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
                 await UpdateScheduleCompletionAsync(schedule.ScheduleId,nowUtc,"Running",nextRunAtUtc,advanceCts.Token);
 
@@ -111,8 +110,7 @@ namespace PQM.Console
 
             using var scope = _scopeFactory.CreateScope();
 
-            var profileSyncService =
-                scope.ServiceProvider.GetRequiredService<ProfileSyncService>();
+            var profileSyncService =scope.ServiceProvider.GetRequiredService<ProfileSyncService>();
 
             // Prevent same device from syncing twice.
             if (!ProfileSyncService.TryAcquireLock(deviceId))
@@ -168,9 +166,9 @@ namespace PQM.Console
             await conn.OpenAsync(cancellationToken);
 
             // Get all due global schedules.
-            using var scheduleCmd = conn.CreateCommand();
-
-            scheduleCmd.CommandText = @"
+            using (var scheduleCmd = conn.CreateCommand())
+            {
+                scheduleCmd.CommandText = @"
                 SELECT
                     Id,
                     ScheduledTime,
@@ -181,24 +179,25 @@ namespace PQM.Console
                   AND NextRunAtUtc <= @nowUtc
                 ORDER BY Id";
 
-            scheduleCmd.Parameters.AddWithValue(
-                "@nowUtc",
-                DateTime.UtcNow);
+                scheduleCmd.Parameters.AddWithValue(
+                    "@nowUtc",
+                    DateTime.UtcNow);
 
-            using var scheduleReader =
-                await scheduleCmd.ExecuteReaderAsync(cancellationToken);
+                using var scheduleReader =
+                    await scheduleCmd.ExecuteReaderAsync(cancellationToken);
 
-            while (await scheduleReader.ReadAsync(cancellationToken))
-            {
-                list.Add(new DueScheduleItem
+                while (await scheduleReader.ReadAsync(cancellationToken))
                 {
-                    ScheduleId = scheduleReader.GetInt32(0),
-                    ScheduledTime = scheduleReader.GetTimeSpan(1),
-                    RepeatMode = scheduleReader.IsDBNull(2)
-                        ? "Daily"
-                        : scheduleReader.GetString(2),
-                    TimeZoneId = "India Standard Time"
-                });
+                    list.Add(new DueScheduleItem
+                    {
+                        ScheduleId = scheduleReader.GetInt32(0),
+                        ScheduledTime = scheduleReader.GetTimeSpan(1),
+                        RepeatMode = scheduleReader.IsDBNull(2)
+                            ? "Daily"
+                            : scheduleReader.GetString(2),
+                        TimeZoneId = "India Standard Time"
+                    });
+                }
             }
 
             // No due schedules.
@@ -206,22 +205,24 @@ namespace PQM.Console
                 return list;
 
             // Get ALL active devices.
-            using var deviceCmd = conn.CreateCommand();
-
-            deviceCmd.CommandText = @"
-        SELECT Id
-        FROM Devices
-        WHERE IsDeleted = 0
-           OR IsDeleted IS NULL
-        ORDER BY Id";
-
-            using var deviceReader =await deviceCmd.ExecuteReaderAsync(cancellationToken);
-
             var deviceIds = new List<int>();
 
-            while (await deviceReader.ReadAsync(cancellationToken))
+            using (var deviceCmd = conn.CreateCommand())
             {
-                deviceIds.Add(deviceReader.GetInt32(0));
+                deviceCmd.CommandText = @"
+                    SELECT Id
+                    FROM Devices
+                    WHERE IsDeleted = 0
+                       OR IsDeleted IS NULL
+                    ORDER BY Id";
+
+                using var deviceReader =
+                    await deviceCmd.ExecuteReaderAsync(cancellationToken);
+
+                while (await deviceReader.ReadAsync(cancellationToken))
+                {
+                    deviceIds.Add(deviceReader.GetInt32(0));
+                }
             }
 
             // Assign all active devices to every due schedule.
