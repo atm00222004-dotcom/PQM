@@ -41,14 +41,17 @@ try
 
     builder.Services.AddOpenApi();
 
-    var connectionString =
-        builder.Configuration.GetConnectionString("DefaultConnection")
+    var connectionString =builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException(
             "Connection string 'DefaultConnection' not found."
         );
 
     builder.Services.AddDbContext<DataContext>(options => options.UseSqlServer(connectionString));
     builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+    builder.Services.AddScoped<ProfileSyncService>(sp =>
+    new ProfileSyncService(
+        connectionString,
+        sp.GetRequiredService<ILogger<ProfileSyncService>>()));
     builder.Services.AddSignalR();
 
     builder.Services.AddCors(options =>
