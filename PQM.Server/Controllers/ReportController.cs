@@ -1,16 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using PQM.Infrastructure;
 using PQM.Server.Models;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.IO;
-using System.Linq;
 using System.Text;
+using PQM.Core.DTOs;
 
 namespace PQM.Server.Controllers
 {
@@ -30,7 +24,7 @@ namespace PQM.Server.Controllers
         }
 
         [HttpGet("aggregate")]
-        public IActionResult GetAggregatedReport([FromQuery] ReportSearchParams searchParams)
+        public IActionResult GetAggregatedReport([FromQuery] ReportSearch searchParams)
         {
             try
             {
@@ -70,7 +64,7 @@ namespace PQM.Server.Controllers
         }
 
         [HttpGet("export")]
-        public IActionResult ExportAggregatedReport([FromQuery] ReportSearchParams searchParams)
+        public IActionResult ExportAggregatedReport([FromQuery] ReportSearch searchParams)
         {
             try
             {
@@ -150,8 +144,7 @@ namespace PQM.Server.Controllers
             }
         }
 
-        private (int TotalTimestamps, List<ParameterValueSearch> Results) ExecuteAggregation(
-            ReportSearchParams searchParams, int intervalMinutes, int pageNumber, int pageSize)
+        private (int TotalTimestamps, List<ParameterValueSearch> Results) ExecuteAggregation(ReportSearch searchParams, int intervalMinutes, int pageNumber, int pageSize)
         {
             using var conn = new SqlConnection(_connectionString);
             conn.Open();
@@ -298,6 +291,22 @@ namespace PQM.Server.Controllers
                 .ToList();
 
             return (totalTimestamps, pagedReadings);
+        }
+
+        public class ParameterValueSearch
+        {
+            public long Id { get; set; }
+            public required string Value { get; set; }
+            public DateTime? DateStamp { get; set; }
+            public required string DeviceName { get; set; }
+            public required string ParameterName { get; set; }
+            public int ParameterId { get; set; }
+        }
+
+        public class ParameterValueSearchResult
+        {
+            public int TotalCount { get; set; }
+            public List<ParameterValueSearch> DeviceLogSearch { get; set; } = new();
         }
     }
 }

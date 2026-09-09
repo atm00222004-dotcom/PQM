@@ -1,7 +1,13 @@
 using System;
 
-namespace PQM.Server.Models
+namespace PQM.Core.DTOs
 {
+    public class ReportSearch : SearchParams
+    {
+        public string? ObjectType { get; set; }
+        public int IntervalMinutes { get; set; } = 15;
+    }
+
     public class SearchParams
     {
         public int DeviceId { get; set; }

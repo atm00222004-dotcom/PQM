@@ -7,7 +7,6 @@ namespace PQM.Core.Entities
     public class DeviceSyncHistory
     {
         [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long Id { get; set; }
 
         public int DeviceId { get; set; }

@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using PQM.Core.Entities;
+using PQM.Core.Helpers;
+using PQM.Core.Interfaces.Repositories;
 using PQM.Server.Models;
+using PQM.Core.DTOs;
 
 namespace PQM.Server.Controllers
 {
@@ -9,17 +12,13 @@ namespace PQM.Server.Controllers
     public class ScheduleController : ControllerBase
     {
         private readonly APIResponse _apiResponse;
-        private readonly string _connectionString;
+        private readonly IScheduleRepository _scheduleRepository;
 
-    public ScheduleController(IConfiguration configuration)
+        public ScheduleController(IScheduleRepository scheduleRepository)
         {
             _apiResponse = new APIResponse();
-
-            _connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException(
-                    "Connection string DefaultConnection not found.");
+            _scheduleRepository = scheduleRepository?? throw new ArgumentNullException(nameof(scheduleRepository));
         }
-
         private static string? FormatUtcIso(DateTime? dt)
         {
             if (!dt.HasValue)
@@ -32,11 +31,8 @@ namespace PQM.Server.Controllers
             return utc.ToString("o");
         }
 
-        // Create a new device sync schedule
         [HttpPost("schedule")]
-        public async Task<ActionResult> CreateSchedule(
-            [FromBody] UpdateScheduleRequest request,
-            CancellationToken cancellationToken)
+        public async Task<ActionResult> CreateSchedule([FromBody] UpdateScheduleRequest request,CancellationToken cancellationToken)
         {
             try
             {
@@ -63,57 +59,23 @@ namespace PQM.Server.Controllers
                 string timeZoneId = "India Standard Time";
 
                 DateTime? nextRunAtUtc = request.IsEnabled
-                    ? PQM.Core.Helpers.ScheduleHelper.ComputeNextRunAtUtc(
+                    ? ScheduleHelper.ComputeNextRunAtUtc(
                         scheduledTime,
                         timeZoneId,
                         nowUtc)
                     : null;
 
-                using var conn =
-                    new SqlConnection(_connectionString);
+                var schedule = new DeviceSyncSchedule
+                {
+                    IsEnabled = request.IsEnabled,
+                    ScheduledTime = scheduledTime,
+                    RepeatMode = request.RepeatMode ?? "Daily",
+                    NextRunAtUtc = nextRunAtUtc
+                };
 
-                await conn.OpenAsync(cancellationToken);
-
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = @"
-                INSERT INTO DeviceSyncSchedule
-                (
-                    IsEnabled,
-                    ScheduledTime,
-                    RepeatMode,
-                    NextRunAtUtc
-                )
-                VALUES
-                (
-                    @isEnabled,
-                    @scheduledTime,
-                    @repeatMode,
-                    @nextRunAtUtc
-                );
-
-                SELECT CAST(SCOPE_IDENTITY() AS INT);";
-
-                cmd.Parameters.AddWithValue(
-                    "@isEnabled",
-                    request.IsEnabled);
-
-                cmd.Parameters.AddWithValue(
-                    "@scheduledTime",
-                    scheduledTime);
-
-                cmd.Parameters.AddWithValue(
-                    "@repeatMode",
-                    request.RepeatMode ?? "Daily");
-
-                cmd.Parameters.AddWithValue(
-                    "@nextRunAtUtc",
-                    (object?)nextRunAtUtc ?? DBNull.Value);
-
-                var result =
-                    await cmd.ExecuteScalarAsync(cancellationToken);
-
-                int scheduleId = Convert.ToInt32(result);
+                int scheduleId = await _scheduleRepository.AddAsync(
+                    schedule,
+                    cancellationToken);
 
                 _apiResponse.Status = true;
                 _apiResponse.StatusCode =
@@ -153,12 +115,8 @@ namespace PQM.Server.Controllers
             }
         }
 
-        // Update an existing device sync schedule
         [HttpPut("schedule/{id:int}")]
-        public async Task<ActionResult> UpdateSchedule(
-            int id,
-            [FromBody] UpdateScheduleRequest request,
-            CancellationToken cancellationToken)
+        public async Task<ActionResult> UpdateSchedule(int id,[FromBody] UpdateScheduleRequest request,CancellationToken cancellationToken)
         {
             try
             {
@@ -185,53 +143,26 @@ namespace PQM.Server.Controllers
                 string timeZoneId = "India Standard Time";
 
                 DateTime? nextRunAtUtc = request.IsEnabled
-                    ? PQM.Core.Helpers.ScheduleHelper.ComputeNextRunAtUtc(
+                    ? ScheduleHelper.ComputeNextRunAtUtc(
                         scheduledTime,
                         timeZoneId,
                         nowUtc)
                     : null;
 
-                using var conn =
-                    new SqlConnection(_connectionString);
+                var schedule = new DeviceSyncSchedule
+                {
+                    Id = id,
+                    IsEnabled = request.IsEnabled,
+                    ScheduledTime = scheduledTime,
+                    RepeatMode = request.RepeatMode ?? "Daily",
+                    NextRunAtUtc = nextRunAtUtc
+                };
 
-                await conn.OpenAsync(cancellationToken);
+                bool updated = await _scheduleRepository.UpdateAsync(
+                    schedule,
+                    cancellationToken);
 
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = @"
-                UPDATE DeviceSyncSchedule
-                SET
-                    IsEnabled = @isEnabled,
-                    ScheduledTime = @scheduledTime,
-                    RepeatMode = @repeatMode,
-                    NextRunAtUtc = @nextRunAtUtc
-                WHERE Id = @id;";
-
-                cmd.Parameters.AddWithValue(
-                    "@id",
-                    id);
-
-                cmd.Parameters.AddWithValue(
-                    "@isEnabled",
-                    request.IsEnabled);
-
-                cmd.Parameters.AddWithValue(
-                    "@scheduledTime",
-                    scheduledTime);
-
-                cmd.Parameters.AddWithValue(
-                    "@repeatMode",
-                    request.RepeatMode ?? "Daily");
-
-                cmd.Parameters.AddWithValue(
-                    "@nextRunAtUtc",
-                    (object?)nextRunAtUtc ?? DBNull.Value);
-
-                int rowsAffected =
-                    await cmd.ExecuteNonQueryAsync(
-                        cancellationToken);
-
-                if (rowsAffected == 0)
+                if (!updated)
                 {
                     return NotFound(new
                     {
@@ -277,43 +208,16 @@ namespace PQM.Server.Controllers
             }
         }
 
-        // Get one schedule by ID
         [HttpGet("schedule/{id:int}")]
-        public async Task<ActionResult> GetSchedule(
-            int id,
-            CancellationToken cancellationToken)
+        public async Task<ActionResult> GetSchedule(int id,CancellationToken cancellationToken)
         {
             try
             {
-                using var conn =
-                    new SqlConnection(_connectionString);
+                var schedule = await _scheduleRepository.GetByIdAsync(
+                    id,
+                    cancellationToken);
 
-                await conn.OpenAsync(cancellationToken);
-
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = @"
-                SELECT
-                    Id,
-                    IsEnabled,
-                    ScheduledTime,
-                    RepeatMode,
-                    NextRunAtUtc,
-                    LastRunAtUtc,
-                    LastRunStatus
-                FROM DeviceSyncSchedule
-                WHERE Id = @id;";
-
-                cmd.Parameters.AddWithValue(
-                    "@id",
-                    id);
-
-                using var reader =
-                    await cmd.ExecuteReaderAsync(
-                        cancellationToken);
-
-                if (!await reader.ReadAsync(
-                    cancellationToken))
+                if (schedule == null)
                 {
                     return NotFound(new
                     {
@@ -323,34 +227,23 @@ namespace PQM.Server.Controllers
 
                 var data = new
                 {
-                    id = reader.GetInt32(0),
+                    id = schedule.Id,
 
-                    isEnabled =
-                        reader.GetBoolean(1),
+                    isEnabled = schedule.IsEnabled,
 
                     scheduledTime =
-                        reader.GetTimeSpan(2)
+                        schedule.ScheduledTime
                             .ToString(@"hh\:mm"),
 
-                    repeatMode =
-                        reader.GetString(3),
+                    repeatMode = schedule.RepeatMode,
 
                     nextRunAtUtc =
-                        reader.IsDBNull(4)
-                            ? null
-                            : FormatUtcIso(
-                                reader.GetDateTime(4)),
+                        FormatUtcIso(schedule.NextRunAtUtc),
 
                     lastRunAtUtc =
-                        reader.IsDBNull(5)
-                            ? null
-                            : FormatUtcIso(
-                                reader.GetDateTime(5)),
+                        FormatUtcIso(schedule.LastRunAtUtc),
 
-                    lastRunStatus =
-                        reader.IsDBNull(6)
-                            ? null
-                            : reader.GetString(6)
+                    lastRunStatus = schedule.LastRunStatus
                 };
 
                 _apiResponse.Status = true;
@@ -381,71 +274,37 @@ namespace PQM.Server.Controllers
             }
         }
 
-        // Get all schedules
         [HttpGet("schedules")]
-        public async Task<ActionResult> GetAllSchedules(
-            CancellationToken cancellationToken)
+        public async Task<ActionResult> GetAllSchedules(CancellationToken cancellationToken)
         {
             try
             {
+                var schedules = await _scheduleRepository.GetAllAsync(
+                    cancellationToken);
+
                 var list = new List<object>();
 
-                using var conn =
-                    new SqlConnection(_connectionString);
-
-                await conn.OpenAsync(cancellationToken);
-
-                using var cmd = conn.CreateCommand();
-
-                cmd.CommandText = @"
-                SELECT
-                    Id,
-                    IsEnabled,
-                    ScheduledTime,
-                    RepeatMode,
-                    NextRunAtUtc,
-                    LastRunAtUtc,
-                    LastRunStatus
-                FROM DeviceSyncSchedule
-                ORDER BY ScheduledTime ASC;";
-
-                using var reader =
-                    await cmd.ExecuteReaderAsync(
-                        cancellationToken);
-
-                while (await reader.ReadAsync(
-                    cancellationToken))
+                foreach (var schedule in schedules)
                 {
                     list.Add(new
                     {
-                        id = reader.GetInt32(0),
+                        id = schedule.Id,
 
-                        isEnabled =
-                            reader.GetBoolean(1),
+                        isEnabled = schedule.IsEnabled,
 
                         scheduledTime =
-                            reader.GetTimeSpan(2)
+                            schedule.ScheduledTime
                                 .ToString(@"hh\:mm"),
 
-                        repeatMode =
-                            reader.GetString(3),
+                        repeatMode = schedule.RepeatMode,
 
                         nextRunAtUtc =
-                            reader.IsDBNull(4)
-                                ? null
-                                : FormatUtcIso(
-                                    reader.GetDateTime(4)),
+                            FormatUtcIso(schedule.NextRunAtUtc),
 
                         lastRunAtUtc =
-                            reader.IsDBNull(5)
-                                ? null
-                                : FormatUtcIso(
-                                    reader.GetDateTime(5)),
+                            FormatUtcIso(schedule.LastRunAtUtc),
 
-                        lastRunStatus =
-                            reader.IsDBNull(6)
-                                ? null
-                                : reader.GetString(6)
+                        lastRunStatus = schedule.LastRunStatus
                     });
                 }
 
@@ -476,16 +335,6 @@ namespace PQM.Server.Controllers
                 return Ok(_apiResponse);
             }
         }
-
-        public class UpdateScheduleRequest
-        {
-            public bool IsEnabled { get; set; }
-
-            public string ScheduledTime { get; set; }
-                = "00:00";
-
-            public string RepeatMode { get; set; }
-                = "Daily";
-        }
+        
     }
 }

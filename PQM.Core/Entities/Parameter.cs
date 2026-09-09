@@ -1,5 +1,9 @@
-    using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace PQM.Core.Entities
 {
@@ -7,7 +11,6 @@ namespace PQM.Core.Entities
     {
         [Key]
         public int Id { get; set; }
-        public int ProfileId { get; set; }
         public required string Name { get; set; }
         public string? ObisCode { get; set; }
         public string? Description { get; set; }
@@ -20,14 +23,13 @@ namespace PQM.Core.Entities
         public int? UnitCode { get; set; }
         public string? Unit { get; set; }
         public string? AggregationType { get; set; }
-        public int? MeterTypeId { get; set; } = 1;
-        [NotMapped]
         public bool IsSelected { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        public virtual Profile? Profile { get; set; }
-        [ForeignKey("MeterTypeId")]
-        public virtual MeterType? MeterType { get; set; }
+        public int ProfileId { get; set; }
+        public Profile? Profile { get; set; }
+        public int? MeterTypeId { get; set; }
+        public MeterType? MeterType { get; set; }
         public virtual ICollection<ReadingValue> ReadingValues { get; set; } = new List<ReadingValue>();
     }
 }

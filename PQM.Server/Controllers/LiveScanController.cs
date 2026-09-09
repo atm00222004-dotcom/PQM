@@ -1,7 +1,6 @@
-﻿using Gurux.DLMS;
-using Gurux.DLMS.Objects;
+﻿using Gurux.DLMS.Objects;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using PQM.Core.DTOs;
 using PQM.Core.Entities;
 using PQM.Core.Interfaces.Repositories;
 using PQM.Infrastructure.Services;
@@ -15,40 +14,20 @@ namespace PQM.Server.Controllers
     public class LiveScanController : ControllerBase
     {
         private readonly IDeviceRepository _deviceRepository;
+        private readonly ILiveRepository _liveRepository;
         private readonly APIResponse _apiResponse;
-        private readonly ILogger<LiveScanController> _logger;
-        private readonly string _connectionString;
-
-    private static readonly ConcurrentDictionary<int, SemaphoreSlim>
-        _deviceLocks = new();
-
-        public LiveScanController(
-            IDeviceRepository deviceRepository,
-            ILogger<LiveScanController> logger,
-            IConfiguration configuration)
+        private static readonly ConcurrentDictionary<int, SemaphoreSlim> _deviceLocks = new();
+        public LiveScanController(IDeviceRepository deviceRepository,ILiveRepository liveRepository,ILogger<LiveScanController> logger)
         {
-            _deviceRepository = deviceRepository;
+            _deviceRepository = deviceRepository?? throw new ArgumentNullException(nameof(deviceRepository));
+            _liveRepository = liveRepository?? throw new ArgumentNullException(nameof(liveRepository));
             _apiResponse = new APIResponse();
-            _logger = logger;
-
-            _connectionString =
-                configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException(
-                    "Connection string DefaultConnection not found.");
         }
-
         private static SemaphoreSlim GetDeviceLock(int deviceId)
         {
-            return _deviceLocks.GetOrAdd(
-                deviceId,
-                _ => new SemaphoreSlim(1, 1));
+            return _deviceLocks.GetOrAdd(deviceId,_ => new SemaphoreSlim(1, 1));
         }
-
-        private static async Task<bool> IsDeviceReachableAsync(
-            string ip,
-            int port,
-            int timeoutMs,
-            CancellationToken cancellationToken)
+        private static async Task<bool> IsDeviceReachableAsync(string ip,int port,int timeoutMs,CancellationToken cancellationToken)
         {
             try
             {
@@ -82,12 +61,8 @@ namespace PQM.Server.Controllers
             }
         }
 
-        // Live scan endpoint
         [HttpPost("{id:int}/live-scan")]
-        public async Task<ActionResult> LiveScan(
-            int id,
-            [FromBody] LiveScanRequest? request,
-            CancellationToken cancellationToken)
+        public async Task<ActionResult> LiveScan(int id,[FromBody] LiveScanRequest? request,CancellationToken cancellationToken)
         {
             // Overall live-scan timeout
             using var timeoutCts =
@@ -214,10 +189,6 @@ namespace PQM.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(
-                    ex,
-                    "[LiveScanController] Live scan failed for Device {DeviceId}.",
-                    id);
 
                 _apiResponse.Status = false;
                 _apiResponse.StatusCode =
@@ -238,161 +209,14 @@ namespace PQM.Server.Controllers
                 deviceLock.Release();
             }
         }
-
-        private async Task<List<LiveScanItemResult>>
-            ReadLiveValuesFromMeterAsync(
-                Device device,
-                List<int>? profileIds,
-                List<int>? parameterIds,
-                CancellationToken ct)
+        private async Task<List<LiveScanItemResult>>ReadLiveValuesFromMeterAsync(Device device,List<int>? profileIds,List<int>? parameterIds,CancellationToken ct)
         {
-            var parameters =
-                new List<(
-                    int Id,
-                    string Name,
-                    string ObisCode,
-                    string? ObjectType,
-                    int? AttributeIndex,
-                    int? Scaler,
-                    string? Unit)>();
-
-            using (var conn =
-                new SqlConnection(_connectionString))
-            {
-                await conn.OpenAsync(ct);
-
-                using var cmd =
-                    conn.CreateCommand();
-
-                if (parameterIds != null &&
-                    parameterIds.Count > 0)
-                {
-                    var idParams =
-                        string.Join(
-                            ",",
-                            parameterIds.Select(
-                                (_, i) => $"@id{i}"));
-
-                    cmd.CommandText = $@"
-                    SELECT
-                        Id,
-                        Name,
-                        ObisCode,
-                        ObjectType,
-                        AttributeIndex,
-                        Scaler,
-                        Unit
-                    FROM Parameters
-                    WHERE Id IN ({idParams})
-                      AND ObisCode IS NOT NULL
-                      AND IsVisible = 1;";
-
-                    for (int i = 0;
-                         i < parameterIds.Count;
-                         i++)
-                    {
-                        cmd.Parameters.Add(
-                            $"@id{i}",
-                            System.Data.SqlDbType.Int)
-                            .Value = parameterIds[i];
-                    }
-                }
-                else if (profileIds != null &&
-                         profileIds.Count > 0)
-                {
-                    var profileParams =
-                        string.Join(
-                            ",",
-                            profileIds.Select(
-                                (_, i) => $"@profileId{i}"));
-
-                    cmd.CommandText = $@"
-                    SELECT
-                        Id,
-                        Name,
-                        ObisCode,
-                        ObjectType,
-                        AttributeIndex,
-                        Scaler,
-                        Unit
-                    FROM Parameters
-                    WHERE ProfileId IN ({profileParams})
-                      AND ObisCode IS NOT NULL
-                      AND IsVisible = 1;";
-
-                    for (int i = 0;
-                         i < profileIds.Count;
-                         i++)
-                    {
-                        cmd.Parameters.Add(
-                            $"@profileId{i}",
-                            System.Data.SqlDbType.Int)
-                            .Value = profileIds[i];
-                    }
-                }
-                else
-                {
-                    cmd.CommandText = @"
-                    SELECT TOP 50
-                        Id,
-                        Name,
-                        ObisCode,
-                        ObjectType,
-                        AttributeIndex,
-                        Scaler,
-                        Unit
-                    FROM Parameters
-                    WHERE ObisCode IS NOT NULL
-                      AND IsVisible = 1
-                      AND (
-                          MeterTypeId = @meterTypeId
-                          OR MeterTypeId IS NULL
-                      )
-                    ORDER BY Id;";
-
-                    cmd.Parameters.Add(
-                        "@meterTypeId",
-                        System.Data.SqlDbType.Int)
-                        .Value =
-                        (object?)device.MeterTypeId
-                        ?? DBNull.Value;
-                }
-
-                using var reader =
-                    await cmd.ExecuteReaderAsync(ct);
-
-                while (await reader.ReadAsync(ct))
-                {
-                    parameters.Add(
-                        (
-                            Id: reader.GetInt32(0),
-
-                            Name: reader.GetString(1),
-
-                            ObisCode: reader.GetString(2),
-
-                            ObjectType:
-                                reader.IsDBNull(3)
-                                    ? null
-                                    : reader.GetString(3),
-
-                            AttributeIndex:
-                                reader.IsDBNull(4)
-                                    ? (int?)null
-                                    : reader.GetInt32(4),
-
-                            Scaler:
-                                reader.IsDBNull(5)
-                                    ? (int?)null
-                                    : reader.GetInt32(5),
-
-                            Unit:
-                                reader.IsDBNull(6)
-                                    ? null
-                                    : reader.GetString(6)
-                        ));
-                }
-            }
+            List<LiveScanParameterInfo> parameters =
+                await _liveRepository.GetParametersForLiveScanAsync(
+                    profileIds,
+                    parameterIds,
+                    device.MeterTypeId,
+                    ct);
 
             if (parameters.Count == 0)
             {
@@ -476,6 +300,99 @@ namespace PQM.Server.Controllers
             }
 
             return results;
+        }
+
+        [HttpGet("profiles")]
+        public async Task<ActionResult> GetProfiles(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var profiles = await _liveRepository.GetProfilesAsync(
+                    cancellationToken);
+
+                var data = profiles
+                    .Select(p => new
+                    {
+                        p.ProfileId,
+                        FriendlyName = string.IsNullOrWhiteSpace(p.FriendlyName)
+                            ? p.ObisCode
+                            : p.FriendlyName,
+                        p.ObisCode,
+                        p.Category
+                    })
+                    .OrderBy(p => p.FriendlyName)
+                    .ToList();
+
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = System.Net.HttpStatusCode.OK;
+                _apiResponse.Data = data;
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Status = false;
+                _apiResponse.StatusCode = System.Net.HttpStatusCode.BadRequest;
+                _apiResponse.Data = null;
+                _apiResponse.Errors = new List<string> { ex.Message };
+                return Ok(_apiResponse);
+            }
+        }
+
+        [HttpGet("parameters")]
+        public async Task<ActionResult> GetParameters([FromQuery] int? deviceId,[FromQuery] int? profileId,[FromQuery] int? meterTypeId,CancellationToken cancellationToken)
+        {
+            try
+            {
+                // If deviceId is provided but meterTypeId is not, resolve meterTypeId from the device
+                if (deviceId.HasValue && deviceId.Value > 0 && !meterTypeId.HasValue)
+                {
+                    var device = await _deviceRepository.GetByIdAsync(
+                        deviceId.Value,
+                        cancellationToken);
+
+                    if (device != null && device.MeterTypeId.HasValue)
+                    {
+                        meterTypeId = device.MeterTypeId.Value;
+                    }
+                }
+
+                var parameters = await _liveRepository.GetVisibleParametersAsync(
+                    profileId,
+                    meterTypeId,
+                    cancellationToken);
+
+                var data = parameters
+                    .Select(p => new
+                    {
+                        p.Id,
+                        p.ProfileId,
+                        p.MeterTypeId,
+                        p.Name,
+                        p.ObisCode,
+                        p.Description,
+                        p.Unit,
+                        p.DataType,
+                        p.ObjectType,
+                        p.AttributeIndex,
+                        p.IsHistorical,
+                        p.IsVisible,
+                        p.Scaler
+                    })
+                    .ToList();
+
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = System.Net.HttpStatusCode.OK;
+                _apiResponse.Data = data;
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Status = false;
+                _apiResponse.StatusCode = System.Net.HttpStatusCode.BadRequest;
+                _apiResponse.Data = null;
+                _apiResponse.Errors = new List<string> { ex.Message };
+                return Ok(_apiResponse);
+            }
         }
     }
 }

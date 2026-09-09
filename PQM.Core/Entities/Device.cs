@@ -7,8 +7,6 @@ namespace PQM.Core.Entities
     {
         [Key]
         public int Id { get; set; }
-        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-        public int? UserId { get; set; }
         public required string Name { get; set; }
         public required string IP { get; set; }
         public int PORT { get; set; }
@@ -16,10 +14,8 @@ namespace PQM.Core.Entities
         public string? ConsumerNumber { get; set; }
         public bool IsActive { get; set; }
         public bool IsDeleted { get; set; }
-        public DateTime CreatedDate { get; set; }
-        public int? CreatedId { get; set; }
-        public DateTime? ModifiedDate { get; set; }
-        public int? ModifiedId { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public DateTime? LastSync { get; set; }
 
         public int? ClientAddress { get; set; } 
@@ -57,17 +53,16 @@ namespace PQM.Core.Entities
 
         public string? Password { get; set; }
         public int? Timeout { get; set; } = 30000;
-        public int? MeterTypeId { get; set; }
+       
 
-        [System.Text.Json.Serialization.JsonIgnore]
-        public MeterType? MeterType { get; set; }
         public string? TimeZoneId { get; set; }
-
         public string Status { get; set; } = "Offline";
-        public DateTime? LastConnectionAttempt { get; set; }
-        public string? LastError { get; set; }
+
+        public int? MeterTypeId { get; set; }
+        public MeterType? MeterType { get; set; }
 
         public int? DeviceSyncScheduleId { get; set; }
         public DeviceSyncSchedule? DeviceSyncSchedule { get; set; }
+
     }
 }

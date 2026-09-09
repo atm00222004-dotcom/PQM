@@ -62,21 +62,6 @@ namespace PQM.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Profiles",
-                columns: table => new
-                {
-                    ProfileId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    ObisCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FriendlyName = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Category = table.Column<string>(type: "nvarchar(max)", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Profiles", x => x.ProfileId);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "User",
                 columns: table => new
                 {
@@ -85,7 +70,7 @@ namespace PQM.Infrastructure.Migrations
                     Username = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Password = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -105,21 +90,17 @@ namespace PQM.Infrastructure.Migrations
                     ConsumerNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedId = table.Column<int>(type: "int", nullable: true),
-                    ModifiedDate = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    ModifiedId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     LastSync = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ClientAddress = table.Column<int>(type: "int", nullable: true),
                     ServerAddress = table.Column<int>(type: "int", nullable: true),
                     AuthenticationTypeId = table.Column<int>(type: "int", nullable: true),
                     Password = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Timeout = table.Column<int>(type: "int", nullable: true),
-                    MeterTypeId = table.Column<int>(type: "int", nullable: true),
                     TimeZoneId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastConnectionAttempt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    LastError = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    MeterTypeId = table.Column<int>(type: "int", nullable: true),
                     DeviceSyncScheduleId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -138,41 +119,24 @@ namespace PQM.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Parameters",
+                name: "Profiles",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    ProfileId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    ProfileId = table.Column<int>(type: "int", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ObisCode = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DataType = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ObjectType = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AttributeIndex = table.Column<int>(type: "int", nullable: true),
-                    IsHistorical = table.Column<bool>(type: "bit", nullable: false),
-                    IsVisible = table.Column<bool>(type: "bit", nullable: false),
-                    Scaler = table.Column<int>(type: "int", nullable: true),
-                    UnitCode = table.Column<int>(type: "int", nullable: true),
-                    Unit = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AggregationType = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    MeterTypeId = table.Column<int>(type: "int", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    ObisCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FriendlyName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Category = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    MeterTypeId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Parameters", x => x.Id);
+                    table.PrimaryKey("PK_Profiles", x => x.ProfileId);
                     table.ForeignKey(
-                        name: "FK_Parameters_MeterType_MeterTypeId",
+                        name: "FK_Profiles_MeterType_MeterTypeId",
                         column: x => x.MeterTypeId,
                         principalTable: "MeterType",
                         principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_Parameters_Profiles_ProfileId",
-                        column: x => x.ProfileId,
-                        principalTable: "Profiles",
-                        principalColumn: "ProfileId",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -202,24 +166,41 @@ namespace PQM.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "DeviceSyncRequests",
+                name: "Parameters",
                 columns: table => new
                 {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    DeviceId = table.Column<int>(type: "int", nullable: false),
-                    RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ObisCode = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DataType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ObjectType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AttributeIndex = table.Column<int>(type: "int", nullable: true),
+                    IsHistorical = table.Column<bool>(type: "bit", nullable: false),
+                    IsVisible = table.Column<bool>(type: "bit", nullable: false),
+                    Scaler = table.Column<int>(type: "int", nullable: true),
+                    UnitCode = table.Column<int>(type: "int", nullable: true),
+                    Unit = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AggregationType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsSelected = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ProfileId = table.Column<int>(type: "int", nullable: false),
+                    MeterTypeId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_DeviceSyncRequests", x => x.Id);
+                    table.PrimaryKey("PK_Parameters", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_DeviceSyncRequests_Devices_DeviceId",
-                        column: x => x.DeviceId,
-                        principalTable: "Devices",
-                        principalColumn: "Id",
+                        name: "FK_Parameters_MeterType_MeterTypeId",
+                        column: x => x.MeterTypeId,
+                        principalTable: "MeterType",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Parameters_Profiles_ProfileId",
+                        column: x => x.ProfileId,
+                        principalTable: "Profiles",
+                        principalColumn: "ProfileId",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -368,11 +349,6 @@ namespace PQM.Infrastructure.Migrations
                 column: "MeterTypeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DeviceSyncRequests_DeviceId",
-                table: "DeviceSyncRequests",
-                column: "DeviceId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Parameters_MeterTypeId",
                 table: "Parameters",
                 column: "MeterTypeId");
@@ -381,6 +357,11 @@ namespace PQM.Infrastructure.Migrations
                 name: "IX_Parameters_ProfileId",
                 table: "Parameters",
                 column: "ProfileId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Profiles_MeterTypeId",
+                table: "Profiles",
+                column: "MeterTypeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ReadingSessions_Device_Profile_Timestamp",
@@ -419,9 +400,6 @@ namespace PQM.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "DeviceSyncHistory");
-
-            migrationBuilder.DropTable(
-                name: "DeviceSyncRequests");
 
             migrationBuilder.DropTable(
                 name: "ReadingValues");

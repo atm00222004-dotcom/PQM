@@ -6,9 +6,7 @@ public class MeterType
 
     public string Name { get; set; } = string.Empty;
 
-    public ICollection<Device> Devices { get; set; }
-        = new List<Device>();
+    public ICollection<Device> Devices { get; set; }= new List<Device>();
 
-    public ICollection<Parameter> Parameters { get; set; }
-        = new List<Parameter>();
+    public ICollection<Parameter> Parameters { get; set; }= new List<Parameter>();
 }

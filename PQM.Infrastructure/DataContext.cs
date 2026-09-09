@@ -1,13 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using PQM.Core.Entities;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Metadata;
-using System.Text;
-using System.Threading.Tasks;
-using Parameter = PQM.Core.Entities.Parameter;
 
 namespace PQM.Infrastructure
 {
@@ -16,16 +8,18 @@ namespace PQM.Infrastructure
         private readonly string? _connectionString;
         public DbSet<User> User { get; set; } = null!;
         public DbSet<Device> Device { get; set; } = null!;
-        public DbSet<Parameter> Parameter { get; set; } = null!;
+        public DbSet<DeviceSyncSchedule> DeviceSyncSchedules { get; set; } = null!;
+        public DbSet<MeterType> MeterType { get; set; } = null!;
         public DbSet<Profile> Profiles { get; set; } = null!;
+        public DbSet<Parameter> Parameter { get; set; } = null!;
+
         public DbSet<ReadingSession> ReadingSessions { get; set; } = null!;
         public DbSet<ReadingValue> ReadingValues { get; set; } = null!;
         public DbSet<DeviceProfileSyncState> DeviceProfileSyncStates { get; set; } = null!;
         public DbSet<DeviceLatestReading> DeviceLatestReadings { get; set; } = null!;
         public DbSet<DeviceEvent> DeviceEvents { get; set; } = null!;
         public DbSet<DeviceSyncHistory> DeviceSyncHistories { get; set; } = null!;
-        public DbSet<DeviceSyncSchedule> DeviceSyncSchedules { get; set; } = null!;
-        //public DbSet<DeviceSyncRequest> DeviceSyncRequests { get; set; } = null!;
+        
 
         public DataContext(DbContextOptions<DataContext> options) : base(options)
         {

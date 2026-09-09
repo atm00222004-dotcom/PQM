@@ -1,11 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PQM.Core.Entities;
 using PQM.Core.Interfaces.Repositories;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace PQM.Infrastructure.Repositories
 {
@@ -22,45 +17,63 @@ namespace PQM.Infrastructure.Repositories
         {
             return await _db.Device
                 .Include(d => d.MeterType)
-                .Where(d => !d.IsDeleted)
+                .Where(d => !d.IsDeleted && d.IsActive)
+                .OrderBy(d => d.Id)
                 .ToListAsync(cancellationToken);
         }
-
-        public async Task<Device?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+        public async Task<Device?> GetByIdAsync(int id,CancellationToken cancellationToken = default)
         {
             return await _db.Device
                 .Include(d => d.MeterType)
-                .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+                .FirstOrDefaultAsync(
+                    d => d.Id == id && !d.IsDeleted,
+                    cancellationToken);
         }
-
-        public async Task<int> AddAsync(Device device, CancellationToken cancellationToken = default)
+        public async Task<int> AddAsync(Device device,CancellationToken cancellationToken = default)
         {
-            device.CreatedDate = DateTime.UtcNow;
-            if (string.IsNullOrEmpty(device.Status))
+            if (device == null)
+                throw new ArgumentNullException(nameof(device));
+
+            device.CreatedAt = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(device.Status))
             {
                 device.Status = "Offline";
             }
 
-            if (device.MeterTypeId == null && device.MeterType != null && !string.IsNullOrWhiteSpace(device.MeterType.Name))
+            // Resolve MeterType by name if only the name was supplied.
+            if (device.MeterTypeId == null &&
+                device.MeterType != null &&
+                !string.IsNullOrWhiteSpace(device.MeterType.Name))
             {
-                var mt = await _db.Set<MeterType>()
-                    .FirstOrDefaultAsync(m => m.Name == device.MeterType.Name, cancellationToken);
-                if (mt != null)
+                var meterType = await _db.Set<MeterType>()
+                    .FirstOrDefaultAsync(
+                        m => m.Name == device.MeterType.Name,
+                        cancellationToken);
+
+                if (meterType != null)
                 {
-                    device.MeterTypeId = mt.Id;
+                    device.MeterTypeId = meterType.Id;
                 }
             }
 
-            device.MeterType = null!;
+            // Do not attach an existing navigation object accidentally.
+            device.MeterType = null;
+
             await _db.Device.AddAsync(device, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
+
             return device.Id;
         }
-
-        public async Task<bool> UpdateAsync(Device device, CancellationToken cancellationToken = default)
+        public async Task<bool> UpdateAsync(Device device,CancellationToken cancellationToken = default)
         {
-            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == device.Id && !d.IsDeleted, cancellationToken);
-            if (existing == null) return false;
+            if (device == null)
+                throw new ArgumentNullException(nameof(device));
+
+            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == device.Id && !d.IsDeleted,cancellationToken);
+
+            if (existing == null)
+                return false;
 
             existing.Name = device.Name;
             existing.IP = device.IP;
@@ -74,102 +87,40 @@ namespace PQM.Infrastructure.Repositories
             existing.Password = device.Password;
             existing.Timeout = device.Timeout;
             existing.TimeZoneId = device.TimeZoneId;
+            existing.MeterTypeId = device.MeterTypeId;
 
-            if (device.MeterTypeId.HasValue)
-            {
-                existing.MeterTypeId = device.MeterTypeId;
-            }
-            else if (device.MeterType != null && !string.IsNullOrWhiteSpace(device.MeterType.Name))
-            {
-                var mt = await _db.Set<MeterType>()
-                    .FirstOrDefaultAsync(m => m.Name == device.MeterType.Name, cancellationToken);
-                if (mt != null)
-                {
-                    existing.MeterTypeId = mt.Id;
-                }
-            }
+            // IMPORTANT:
+            // Device -> Schedule is many-to-one.
+            // Therefore DeviceSyncScheduleId belongs here.
+            existing.DeviceSyncScheduleId = device.DeviceSyncScheduleId;
+
+            // If status is intentionally managed by the device/service,
+            // don't overwrite it from the edit screen.
 
             await _db.SaveChangesAsync(cancellationToken);
+
             return true;
         }
-
-
-        public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+        public async Task<bool> DeleteAsync(int id,CancellationToken cancellationToken = default)
         {
-            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
-            if (existing == null) return false;
-
-            existing.IsDeleted = true;
-            await _db.SaveChangesAsync(cancellationToken);
-            return true;
-        }
-
-        public async Task<bool> EnableSyncAsync(int id, CancellationToken cancellationToken = default)
-        {
-            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
-            if (existing == null) return false;
-
-            existing.IsActive = true;
-            await _db.SaveChangesAsync(cancellationToken);
-            return true;
-        }
-
-        public async Task<bool> DisableSyncAsync(int id, CancellationToken cancellationToken = default)
-        {
-            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
-            if (existing == null) return false;
-
-            existing.IsActive = false;
-            existing.Status = "Offline";
-            await _db.SaveChangesAsync(cancellationToken);
-            return true;
-        }
-
-        public async Task QueueSyncRequestAsync(int deviceId, CancellationToken cancellationToken = default)
-        {
-            var req = new DeviceSyncRequest
-            {
-                DeviceId = deviceId,
-                RequestedAt = DateTime.UtcNow,
-                Status = "Pending"
-            };
-            await _db.DeviceSyncRequests.AddAsync(req, cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
-        }
-
-        public async Task<IEnumerable<DeviceSyncHistory>> GetSyncHistoryAsync(int deviceId, int take = 50, CancellationToken cancellationToken = default)
-        {
-            return await _db.DeviceSyncHistories
-                .Where(h => h.DeviceId == deviceId)
-                .OrderByDescending(h => h.StartedAt)
-                .Take(take)
-                .ToListAsync(cancellationToken);
-        }
-
-        public async Task<DeviceSyncSchedule?> GetScheduleAsync(CancellationToken cancellationToken = default)
-        {
-            return await _db.DeviceSyncSchedules
-                .FirstOrDefaultAsync(cancellationToken);
-        }
-
-        public async Task UpsertScheduleAsync(DeviceSyncSchedule schedule, CancellationToken cancellationToken = default)
-        {
-            var existing = await _db.DeviceSyncSchedules
-                .FirstOrDefaultAsync(s => s.Id == schedule.Id, cancellationToken);
+            var existing = await _db.Device.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted,cancellationToken);
 
             if (existing == null)
-            {
-                await _db.DeviceSyncSchedules.AddAsync(schedule, cancellationToken);
-            }
-            else
-            {
-                existing.IsEnabled = schedule.IsEnabled;
-                existing.ScheduledTime = schedule.ScheduledTime;
-                existing.RepeatMode = schedule.RepeatMode;
-                existing.NextRunAtUtc = schedule.NextRunAtUtc;
-            }
+                return false;
+
+            // Soft delete
+            existing.IsDeleted = true;
+            existing.IsActive = false;
 
             await _db.SaveChangesAsync(cancellationToken);
+
+            return true;
+        }
+        public async Task<IEnumerable<MeterType>> GetMeterTypesAsync(CancellationToken cancellationToken = default)
+        {
+            return await _db.Set<MeterType>()
+                .OrderBy(m => m.Name)
+                .ToListAsync(cancellationToken);
         }
     }
 }

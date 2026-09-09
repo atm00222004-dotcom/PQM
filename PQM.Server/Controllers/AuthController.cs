@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using PQM.Core.Entities;
-using PQM.Infrastructure;
-using PQM.Server.Models;
+using PQM.Core.Interfaces.Repositories;
+using PQM.Core.DTOs;
 
 namespace PQM.Server.Controllers
 {
@@ -9,17 +9,17 @@ namespace PQM.Server.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly DataContext _db;
+        private readonly IAuthRepository _authRepository;
 
-        public AuthController(DataContext db)
+        public AuthController(IAuthRepository authRepository)
         {
-            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _authRepository = authRepository?? throw new ArgumentNullException(nameof(authRepository));
         }
 
         [HttpPost("signup")]
-        public IActionResult SignUp([FromBody] SignUpDto dto)
+        public async Task<IActionResult> SignUp([FromBody] SignUpDto dto,CancellationToken cancellationToken)
         {
-            if (_db.User.Any(u => u.Email == dto.Email))
+            if (await _authRepository.EmailExistsAsync(dto.Email, cancellationToken))
             {
                 return BadRequest(new
                 {
@@ -35,22 +35,21 @@ namespace PQM.Server.Controllers
                 CreatedDate = DateTime.UtcNow
             };
 
-            _db.User.Add(user);
-            _db.SaveChanges();
+            int userId = await _authRepository.AddAsync(user, cancellationToken);
 
             return Ok(new
             {
-                token = $"token-{user.Id}-{user.Email}"
+                token = $"token-{userId}-{user.Email}"
             });
         }
 
         [HttpPost("signin")]
-        public IActionResult SignIn([FromBody] SignInDto dto)
+        public async Task<IActionResult> SignIn([FromBody] SignInDto dto,CancellationToken cancellationToken)
         {
-            var user = _db.User.FirstOrDefault(
-                u => u.Email == dto.Email &&
-                     u.Password == dto.Password
-            );
+            var user = await _authRepository.GetByEmailAndPasswordAsync(
+                dto.Email,
+                dto.Password,
+                cancellationToken);
 
             if (user == null)
             {
@@ -67,7 +66,7 @@ namespace PQM.Server.Controllers
         }
 
         [HttpGet("me")]
-        public IActionResult GetMe([FromQuery] string token)
+        public async Task<IActionResult> GetMe([FromQuery] string token,CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(token) ||
                 !token.StartsWith("token-"))
@@ -83,9 +82,9 @@ namespace PQM.Server.Controllers
                 return Unauthorized();
             }
 
-            var user = _db.User.FirstOrDefault(
-                u => u.Id == userId
-            );
+            var user = await _authRepository.GetByIdAsync(
+                userId,
+                cancellationToken);
 
             if (user == null)
             {

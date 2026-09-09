@@ -1,13 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using PQM.Core.Entities;
 using PQM.Infrastructure;
 using PQM.Infrastructure.Services;
+using PQM.Core.DTOs;
 using PQM.Server.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace PQM.Server.Controllers
 {

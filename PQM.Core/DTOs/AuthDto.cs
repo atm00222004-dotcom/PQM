@@ -1,4 +1,4 @@
-﻿namespace PQM.Server.Models
+﻿namespace PQM.Core.DTOs
 {
     public class SignUpDto
     {

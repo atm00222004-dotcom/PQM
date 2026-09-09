@@ -56,11 +56,8 @@ namespace PQM.Infrastructure.Migrations
                     b.Property<string>("ConsumerNumber")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedId")
-                        .HasColumnType("int");
 
                     b.Property<int?>("DeviceSyncScheduleId")
                         .HasColumnType("int");
@@ -76,22 +73,10 @@ namespace PQM.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime?>("LastConnectionAttempt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LastError")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime?>("LastSync")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("MeterTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("ModifiedId")
                         .HasColumnType("int");
 
                     b.Property<string>("Name")
@@ -120,6 +105,9 @@ namespace PQM.Infrastructure.Migrations
 
                     b.Property<int?>("Timeout")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -255,34 +243,6 @@ namespace PQM.Infrastructure.Migrations
                     b.ToTable("DeviceSyncHistory", (string)null);
                 });
 
-            modelBuilder.Entity("PQM.Core.Entities.DeviceSyncRequest", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("DeviceId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeviceId");
-
-                    b.ToTable("DeviceSyncRequests");
-                });
-
             modelBuilder.Entity("PQM.Core.Entities.DeviceSyncSchedule", b =>
                 {
                     b.Property<int>("Id")
@@ -341,6 +301,9 @@ namespace PQM.Infrastructure.Migrations
                     b.Property<bool>("IsHistorical")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSelected")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsVisible")
                         .HasColumnType("bit");
 
@@ -393,11 +356,16 @@ namespace PQM.Infrastructure.Migrations
                     b.Property<string>("FriendlyName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("MeterTypeId")
+                        .HasColumnType("int");
+
                     b.Property<string>("ObisCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ProfileId");
+
+                    b.HasIndex("MeterTypeId");
 
                     b.ToTable("Profiles", (string)null);
                 });
@@ -476,7 +444,7 @@ namespace PQM.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime?>("CreatedDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Email")
@@ -569,17 +537,6 @@ namespace PQM.Infrastructure.Migrations
                     b.Navigation("Profile");
                 });
 
-            modelBuilder.Entity("PQM.Core.Entities.DeviceSyncRequest", b =>
-                {
-                    b.HasOne("PQM.Core.Entities.Device", "Device")
-                        .WithMany()
-                        .HasForeignKey("DeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Device");
-                });
-
             modelBuilder.Entity("PQM.Core.Entities.Parameter", b =>
                 {
                     b.HasOne("MeterType", "MeterType")
@@ -596,6 +553,15 @@ namespace PQM.Infrastructure.Migrations
                     b.Navigation("MeterType");
 
                     b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("PQM.Core.Entities.Profile", b =>
+                {
+                    b.HasOne("MeterType", "MeterType")
+                        .WithMany()
+                        .HasForeignKey("MeterTypeId");
+
+                    b.Navigation("MeterType");
                 });
 
             modelBuilder.Entity("PQM.Core.Entities.ReadingSession", b =>
