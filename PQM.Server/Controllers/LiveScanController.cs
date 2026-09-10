@@ -65,21 +65,13 @@ namespace PQM.Server.Controllers
         public async Task<ActionResult> LiveScan(int id,[FromBody] LiveScanRequest? request,CancellationToken cancellationToken)
         {
             // Overall live-scan timeout
-            using var timeoutCts =
-                new CancellationTokenSource(
-                    TimeSpan.FromSeconds(120));
+            using var timeoutCts =new CancellationTokenSource(TimeSpan.FromSeconds(600));
 
-            using var linkedCts =
-                CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken,
-                    timeoutCts.Token);
+            using var linkedCts =CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,timeoutCts.Token);
 
             var ct = linkedCts.Token;
 
-            var device =
-                await _deviceRepository.GetByIdAsync(
-                    id,
-                    ct);
+            var device =await _deviceRepository.GetByIdAsync(id,ct);
 
             if (device == null)
             {
@@ -93,10 +85,7 @@ namespace PQM.Server.Controllers
                 GetDeviceLock(id);
 
             // Do not queue another scan for the same device
-            bool acquired =
-                await deviceLock.WaitAsync(
-                    TimeSpan.Zero,
-                    cancellationToken);
+            bool acquired = await deviceLock.WaitAsync(TimeSpan.Zero,cancellationToken);
 
             if (!acquired)
             {
@@ -143,12 +132,7 @@ namespace PQM.Server.Controllers
                     return Ok(_apiResponse);
                 }
 
-                var items =
-                    await ReadLiveValuesFromMeterAsync(
-                        device,
-                        request?.ProfileIds,
-                        request?.ParameterIds,
-                        ct);
+                var items = await ReadLiveValuesFromMeterAsync(device,request?.ProfileIds,request?.ParameterIds,ct);
 
                 _apiResponse.Status = true;
                 _apiResponse.StatusCode =
@@ -182,7 +166,7 @@ namespace PQM.Server.Controllers
                 _apiResponse.Errors =
                     new List<string>
                     {
-                    "Meter did not respond within 120 seconds."
+                    "Meter did not respond within 300 seconds."
                     };
 
                 return Ok(_apiResponse);
@@ -211,12 +195,7 @@ namespace PQM.Server.Controllers
         }
         private async Task<List<LiveScanItemResult>>ReadLiveValuesFromMeterAsync(Device device,List<int>? profileIds,List<int>? parameterIds,CancellationToken ct)
         {
-            List<LiveScanParameterInfo> parameters =
-                await _liveRepository.GetParametersForLiveScanAsync(
-                    profileIds,
-                    parameterIds,
-                    device.MeterTypeId,
-                    ct);
+            List<LiveScanParameterInfo> parameters = await _liveRepository.GetParametersForLiveScanAsync(profileIds,parameterIds,device.MeterTypeId,ct);
 
             if (parameters.Count == 0)
             {
@@ -313,7 +292,7 @@ namespace PQM.Server.Controllers
                 var data = profiles
                     .Select(p => new
                     {
-                        p.ProfileId,
+                        p.Id,
                         FriendlyName = string.IsNullOrWhiteSpace(p.FriendlyName)
                             ? p.ObisCode
                             : p.FriendlyName,

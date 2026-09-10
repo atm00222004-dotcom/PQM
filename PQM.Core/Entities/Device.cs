@@ -56,8 +56,6 @@ namespace PQM.Core.Entities
        
 
         public string? TimeZoneId { get; set; }
-        public string Status { get; set; } = "Offline";
-
         public int? MeterTypeId { get; set; }
         public MeterType? MeterType { get; set; }
 

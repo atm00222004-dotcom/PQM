@@ -48,8 +48,7 @@ namespace PQM.Infrastructure.Repositories
         }
         public async Task<List<LiveScanParameterInfo>> GetParametersForLiveScanAsync(List<int>? profileIds,List<int>? parameterIds,int? meterTypeId,CancellationToken cancellationToken = default)
         {
-            var query = _db.Parameter
-                .Where(p => p.IsVisible && p.ObisCode != null);
+            var query = _db.Parameter.Where(p => p.ObisCode != null);
 
             if (parameterIds != null && parameterIds.Count > 0)
             {
@@ -65,8 +64,7 @@ namespace PQM.Infrastructure.Repositories
                     .Where(
                         p => p.MeterTypeId == meterTypeId ||
                              p.MeterTypeId == null)
-                    .OrderBy(p => p.Id)
-                    .Take(50);
+                    .OrderBy(p => p.Id);
             }
 
             return await query

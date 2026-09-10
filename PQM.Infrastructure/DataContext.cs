@@ -16,10 +16,6 @@ namespace PQM.Infrastructure
         public DbSet<ReadingSession> ReadingSessions { get; set; } = null!;
         public DbSet<ReadingValue> ReadingValues { get; set; } = null!;
         public DbSet<DeviceProfileSyncState> DeviceProfileSyncStates { get; set; } = null!;
-        public DbSet<DeviceLatestReading> DeviceLatestReadings { get; set; } = null!;
-        public DbSet<DeviceEvent> DeviceEvents { get; set; } = null!;
-        public DbSet<DeviceSyncHistory> DeviceSyncHistories { get; set; } = null!;
-        
 
         public DataContext(DbContextOptions<DataContext> options) : base(options)
         {
@@ -56,12 +52,6 @@ namespace PQM.Infrastructure
                 .HasForeignKey(d => d.DeviceSyncScheduleId)
                 .OnDelete(DeleteBehavior.NoAction);
 
-            modelBuilder.Entity<DeviceSyncHistory>(entity =>
-            {
-                entity.ToTable("DeviceSyncHistory");
-                entity.HasKey(e => e.Id);
-            });
-
             modelBuilder.Entity<Device>(entity =>
             {
                 entity.ToTable("Devices");
@@ -78,7 +68,7 @@ namespace PQM.Infrastructure
             modelBuilder.Entity<Profile>(entity =>
             {
                 entity.ToTable("Profiles");
-                entity.HasKey(e => e.ProfileId);
+                entity.HasKey(e => e.Id);
             });
 
             modelBuilder.Entity<Parameter>(entity =>
@@ -131,24 +121,13 @@ namespace PQM.Infrastructure
                     .HasForeignKey(d => d.ParameterId);
             });
 
-            modelBuilder.Entity<DeviceLatestReading>(entity =>
-            {
-                entity.ToTable("DeviceLatestReadings");
-                entity.HasKey(e => new { e.DeviceId, e.ParameterId });
-
-                entity.HasOne(d => d.Device)
-                    .WithMany()
-                    .HasForeignKey(d => d.DeviceId);
-
-                entity.HasOne(d => d.Parameter)
-                    .WithMany()
-                    .HasForeignKey(d => d.ParameterId);
-            });
-
             modelBuilder.Entity<DeviceProfileSyncState>(entity =>
             {
                 entity.ToTable("DeviceProfileSyncState");
-                entity.HasKey(e => new { e.DeviceId, e.ProfileId });
+                entity.HasKey(e => e.Id);
+
+                entity.HasIndex(e => new { e.DeviceId, e.ProfileId })
+                    .IsUnique();
 
                 entity.HasOne(d => d.Device)
                     .WithMany()
@@ -160,23 +139,6 @@ namespace PQM.Infrastructure
                     .HasForeignKey(d => d.ProfileId)
                     .OnDelete(DeleteBehavior.NoAction);
             });
-
-            modelBuilder.Entity<DeviceEvent>(entity =>
-            {
-                entity.ToTable("DeviceEvent");
-                entity.HasKey(e => e.Id);
-
-                entity.HasOne(d => d.Device)
-                    .WithMany()
-                    .HasForeignKey(d => d.DeviceId);
-
-                entity.HasOne(d => d.Parameter)
-                    .WithMany()
-                    .HasForeignKey(d => d.ParameterId);
-            });
-
-
-
         }
 
     }

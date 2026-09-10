@@ -3,7 +3,6 @@ using PQM.Core.Interfaces.Repositories;
 using PQM.Infrastructure;
 using PQM.Infrastructure.Repositories;
 using PQM.Infrastructure.Services;
-using PQM.Server.Hubs;
 using Serilog;
 using Serilog.Events;
 using System.Text.Json.Serialization;
@@ -51,9 +50,7 @@ try
     builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
     builder.Services.AddScoped<ILiveRepository, LiveRepository>();
 
-    builder.Services.AddScoped<ProfileSyncService>(sp =>new ProfileSyncService(connectionString,sp.GetRequiredService<ILogger<ProfileSyncService>>()));
-
-    builder.Services.AddSignalR();
+    builder.Services.AddScoped<ProfileSyncService>(sp => new ProfileSyncService(connectionString, sp.GetRequiredService<ILogger<ProfileSyncService>>()));
 
     builder.Services.AddCors(options =>
     {
@@ -152,8 +149,6 @@ try
     try
     {
         app.MapControllers();
-
-        app.MapHub<DeviceHub>("/hubs/device");
 
         app.MapFallbackToFile("/index.html");
 

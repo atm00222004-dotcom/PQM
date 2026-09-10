@@ -18,9 +18,6 @@ namespace PQM.Infrastructure.Services
         public int RowsSkipped { get; set; }
         public DateTime? NewWatermarkUtc { get; set; }
         public string? ErrorMessage { get; set; }
-
-        public override string ToString() =>
-            $"SyncResult [Success={Success}, RowsRead={RowsRead}, RowsWritten={RowsWritten}, RowsSkipped={RowsSkipped}, NewWatermarkUtc={NewWatermarkUtc:yyyy-MM-dd HH:mm:ss UTC}, Error={ErrorMessage ?? "None"}]";
     }
 
     public class DeviceSyncResult
@@ -41,9 +38,11 @@ namespace PQM.Infrastructure.Services
     public class ProfileSyncService
     {
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte> _activeDeviceSyncs = new();
+
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> _lockAcquiredTimes = new();
 
         private readonly string _connectionString;
+
         private readonly ILogger<ProfileSyncService> _logger;
 
         public ProfileSyncService(string connectionString, ILogger<ProfileSyncService> logger)
@@ -51,11 +50,6 @@ namespace PQM.Infrastructure.Services
             _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-
-        /// <summary>
-        /// Checks whether a sync or scan is currently in progress for the specified device.
-        /// </summary>
-        public bool IsDeviceSyncing(int deviceId) => IsLocked(deviceId);
 
         public static bool TryAcquireLock(int deviceId)
         {
@@ -82,24 +76,6 @@ namespace PQM.Infrastructure.Services
             _lockAcquiredTimes.TryRemove(deviceId, out _);
         }
 
-        public static bool IsLocked(int deviceId)
-        {
-            if (_lockAcquiredTimes.TryGetValue(deviceId, out var acquiredAt))
-            {
-                if (DateTime.UtcNow - acquiredAt > TimeSpan.FromMinutes(45))
-                {
-                    _activeDeviceSyncs.TryRemove(deviceId, out _);
-                    _lockAcquiredTimes.TryRemove(deviceId, out _);
-                    return false;
-                }
-            }
-            return _activeDeviceSyncs.ContainsKey(deviceId);
-        }
-
-        /// <summary>
-        /// Executes a full multi-profile sweep for a device under a SINGLE DlmsMeterReader connection/session.
-        /// Connects once, reads all catalog profiles, updates device status, and disassociates cleanly once.
-        /// </summary>
         public async Task<DeviceSyncResult> SyncDeviceAllProfilesAsync(int deviceId, System.Threading.CancellationToken cancellationToken = default)
         {
             var deviceResult = new DeviceSyncResult { DeviceId = deviceId };
@@ -116,17 +92,7 @@ namespace PQM.Infrastructure.Services
             _logger.LogInformation("[ProfileSyncService] Concurrency lock ACQUIRED for Device {DeviceId}.", deviceId);
 
             DateTime syncExecutionTimeUtc = DateTime.UtcNow;
-            long historyId = 0;
             bool isTimedOut = false;
-
-            try
-            {
-                historyId = await InsertSyncHistoryStartAsync(deviceId, syncExecutionTimeUtc);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[ProfileSyncService] Failed to insert initial DeviceSyncHistory record for Device {DeviceId}.", deviceId);
-            }
 
             // Generous 45-minute outer safety timeout for complete per-device sweep
             using var hardCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -229,14 +195,7 @@ namespace PQM.Infrastructure.Services
                     }
                 } // DisconnectAsync() executes here automatically, sending WRAPPER RLRQ frame!
 
-                string newStatus = deviceResult.Success ? "Online" : "Error";
-                string? lastError = deviceResult.Success ? null : deviceResult.ErrorMessage;
-                await UpdateDeviceStatusInDbAsync(deviceId, newStatus, syncExecutionTimeUtc, lastError);
-
-                _logger.LogInformation(
-                    "[ProfileSyncService] Completed single-session profile sweep for Device {DeviceId} ('{DeviceName}'). " +
-                    "Status={Status}, Succeeded={Succeeded}/{Attempted}, TotalWritten={TotalWritten}, TotalSkipped={TotalSkipped}",
-                    deviceId, device.Name, newStatus, deviceResult.ProfilesSucceeded, deviceResult.ProfilesAttempted, deviceResult.TotalRowsWritten, deviceResult.TotalRowsSkipped);
+                await UpdateDeviceStatusInDbAsync(deviceId, syncExecutionTimeUtc);
 
                 return deviceResult;
             }
@@ -246,42 +205,17 @@ namespace PQM.Infrastructure.Services
                 _logger.LogWarning("[ProfileSyncService] Hard cancellation timeout reached for Device {DeviceId}.", deviceId);
                 deviceResult.Success = false;
                 deviceResult.ErrorMessage = "Sync timed out after 5 minutes";
-                await UpdateDeviceStatusInDbAsync(deviceId, "Error", syncExecutionTimeUtc, "Sync timed out after 5 minutes");
+                await UpdateDeviceStatusInDbAsync(deviceId, syncExecutionTimeUtc);
                 return deviceResult;
             }
             finally
             {
-                if (historyId > 0)
-                {
-                    try
-                    {
-                        string historyStatus = isTimedOut ? "TimedOut" : (deviceResult.Success ? "Success" : "Failed");
-                        await UpdateSyncHistoryCompletionAsync(
-                            historyId,
-                            historyStatus,
-                            DateTime.UtcNow,
-                            deviceResult.ErrorMessage,
-                            deviceResult.ProfilesSucceeded,
-                            deviceResult.TotalRowsWritten);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "[ProfileSyncService] Failed to update DeviceSyncHistory record {HistoryId} in finally block.", historyId);
-                    }
-                }
-
                 ReleaseLock(deviceId);
                 _logger.LogInformation("[ProfileSyncService] Concurrency lock RELEASED for Device {DeviceId}.", deviceId);
             }
         }
 
-        private async Task<SyncResult> SyncSingleProfileOnOpenReaderAsync(
-            DlmsMeterReader reader,
-            Device device,
-            string obisCode,
-            TimeZoneInfo deviceTz,
-            DateTime syncExecutionTimeUtc,
-            System.Threading.CancellationToken cancellationToken = default)
+        private async Task<SyncResult> SyncSingleProfileOnOpenReaderAsync(DlmsMeterReader reader,Device device,string obisCode,TimeZoneInfo deviceTz,DateTime syncExecutionTimeUtc,System.Threading.CancellationToken cancellationToken = default)
         {
             var result = new SyncResult();
             bool isTimeSeries = ProfileCatalog.TimeSeriesProfiles.ContainsKey(obisCode);
@@ -326,12 +260,7 @@ namespace PQM.Infrastructure.Services
             return await SaveReadingSessionAsync(device.Id, profileId, obisCode, isTimeSeries, deviceTz, rows, columns, parameterMap, currentWatermarkUtc, syncExecutionTimeUtc);
         }
 
-        private async Task<int> GetOrCreateParameterForColumnAsync(
-            SqlConnection conn,
-            SqlTransaction tx,
-            int profileId,
-            int colIndex,
-            IReadOnlyList<ProfileColumnInfo> columns)
+        private async Task<int> GetOrCreateParameterForColumnAsync(SqlConnection conn,SqlTransaction tx,int profileId,int colIndex,IReadOnlyList<ProfileColumnInfo> columns)
         {
             string obis = (colIndex < columns.Count && !string.IsNullOrEmpty(columns[colIndex].LogicalName))
                 ? columns[colIndex].LogicalName
@@ -368,146 +297,22 @@ namespace PQM.Infrastructure.Services
             }
         }
 
-        private async Task UpdateDeviceStatusInDbAsync(int deviceId, string status, DateTime lastSyncUtc, string? lastError)
+        private async Task UpdateDeviceStatusInDbAsync(int deviceId, DateTime lastSyncUtc)
         {
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                UPDATE Devices 
-                SET Status = @status, 
-                    LastSync = @lastSync, 
-                    LastError = @lastError,
-                    LastConnectionAttempt = @lastSync
-                WHERE Id = @id";
-            cmd.Parameters.AddWithValue("@status", status);
+        UPDATE Devices 
+        SET LastSync = @lastSync
+        WHERE Id = @id";
             cmd.Parameters.AddWithValue("@lastSync", lastSyncUtc);
-            cmd.Parameters.AddWithValue("@lastError", (object?)lastError ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@id", deviceId);
 
             await cmd.ExecuteNonQueryAsync();
         }
 
-        public async Task<SyncResult> SyncDeviceProfileAsync(int deviceId, string obisCode)
-        {
-            var result = new SyncResult();
-
-            try
-            {
-                // 1. Load Device entity
-                Device? device = await LoadDeviceAsync(deviceId);
-                if (device == null)
-                {
-                    result.Success = false;
-                    result.ErrorMessage = $"Device with Id={deviceId} not found.";
-                    _logger.LogError("[ProfileSyncService] {ErrorMessage}", result.ErrorMessage);
-                    return result;
-                }
-
-                // Determine Device TimeZone
-                TimeZoneInfo deviceTz = GetDeviceTimeZone(device.TimeZoneId);
-
-                // 2. Classify OBIS Code
-                bool isTimeSeries = ProfileCatalog.TimeSeriesProfiles.ContainsKey(obisCode);
-                bool isStaticOrMetadata = ProfileCatalog.StaticOrMetadataProfiles.ContainsKey(obisCode);
-
-                if (!isTimeSeries && !isStaticOrMetadata)
-                {
-                    _logger.LogWarning("[ProfileSyncService] OBIS code {ObisCode} not found in ProfileCatalog; treating as TimeSeries by default.", obisCode);
-                    isTimeSeries = true;
-                }
-
-                // Ensure Profile record exists in DB
-                int profileId = await EnsureProfileAsync(obisCode, isTimeSeries);
-
-                // 3 & 4. Determine Watermark / StartTime
-                DateTime? startTimeLocal = null;
-                DateTime? currentWatermarkUtc = null;
-
-                if (isTimeSeries)
-                {
-                    currentWatermarkUtc = await GetLastReadWatermarkUtcAsync(deviceId, profileId);
-                    if (currentWatermarkUtc.HasValue)
-                    {
-                        // Take LastReadTimestampUtc, subtract 1-hour safety overlap
-                        DateTime watermarkWithSafetyUtc = currentWatermarkUtc.Value.AddHours(-1);
-
-                        // Convert UTC watermark to device's local timezone
-                        startTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(watermarkWithSafetyUtc, deviceTz);
-
-                        _logger.LogInformation(
-                            "[ProfileSyncService] TimeSeries sync for device {DeviceId} ('{DeviceName}'), profile '{ObisCode}': " +
-                            "Existing Watermark UTC = {WatermarkUtc:yyyy-MM-dd HH:mm:ss UTC} (with 1h safety = {WatermarkSafetyUtc:yyyy-MM-dd HH:mm:ss UTC}). " +
-                            "Converted Local StartTime = {StartTimeLocal:yyyy-MM-dd HH:mm:ss} (Tz: {TzId})",
-                            deviceId, device.Name, obisCode, currentWatermarkUtc.Value, watermarkWithSafetyUtc, startTimeLocal.Value, deviceTz.Id);
-                    }
-                    else
-                    {
-                        _logger.LogInformation(
-                            "[ProfileSyncService] TimeSeries sync for device {DeviceId} ('{DeviceName}'), profile '{ObisCode}': " +
-                            "No existing watermark state found. Performing full buffer read (startTime = null).",
-                            deviceId, device.Name, obisCode);
-                    }
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "[ProfileSyncService] Static/Metadata sync for device {DeviceId} ('{DeviceName}'), profile '{ObisCode}': " +
-                        "Performing full buffer read (watermarks not used).",
-                        deviceId, device.Name, obisCode);
-                }
-
-                // 5. Connect to meter and read profile rows
-                IReadOnlyList<ProfileRow> rows;
-                IReadOnlyList<ProfileColumnInfo> columns;
-
-                await using (var reader = new DlmsMeterReader(device, verboseLogging: false))
-                {
-                    await reader.ConnectAsync();
-                    await reader.ReadAssociationViewAsync();
-
-                    // Read capture objects to get column descriptors
-                    var profileObj = reader.GetProfileObjects().FirstOrDefault(p => p.LogicalName == obisCode);
-                    if (profileObj != null)
-                    {
-                        columns = await reader.ReadCaptureObjectsAsync(profileObj);
-                    }
-                    else
-                    {
-                        columns = new List<ProfileColumnInfo>();
-                    }
-
-                    rows = await reader.ReadProfileAllEntriesAsync(obisCode, startTimeLocal);
-                }
-
-                result.RowsRead = rows.Count;
-                _logger.LogInformation("[ProfileSyncService] Read {RowsCount} rows from meter for device {DeviceId}, profile '{ObisCode}'.", rows.Count, deviceId, obisCode);
-
-                var parameterMap = await EnsureParametersAsync(profileId, columns);
-                DateTime syncExecutionTimeUtc = DateTime.UtcNow;
-
-                return await SaveReadingSessionAsync(deviceId, profileId, obisCode, isTimeSeries, deviceTz, rows, columns, parameterMap, currentWatermarkUtc, syncExecutionTimeUtc);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[ProfileSyncService] Sync failed for device {DeviceId}, profile '{ObisCode}'.", deviceId, obisCode);
-                result.Success = false;
-                result.ErrorMessage = ex.Message;
-                return result;
-            }
-        }
-
-        private async Task<SyncResult> SaveReadingSessionAsync(
-            int deviceId,
-            int profileId,
-            string obisCode,
-            bool isTimeSeries,
-            TimeZoneInfo deviceTz,
-            IReadOnlyList<ProfileRow> rows,
-            IReadOnlyList<ProfileColumnInfo> columns,
-            Dictionary<int, int> parameterMap,
-            DateTime? currentWatermarkUtc,
-            DateTime syncExecutionTimeUtc)
+        private async Task<SyncResult> SaveReadingSessionAsync(int deviceId,int profileId,string obisCode,bool isTimeSeries,TimeZoneInfo deviceTz,IReadOnlyList<ProfileRow> rows,IReadOnlyList<ProfileColumnInfo> columns,Dictionary<int, int> parameterMap,DateTime? currentWatermarkUtc,DateTime syncExecutionTimeUtc)
         {
             var result = new SyncResult { RowsRead = rows.Count };
 
@@ -574,7 +379,6 @@ namespace PQM.Infrastructure.Services
                             double? numericVal = TryParseDouble(formattedVal);
 
                             await InsertReadingValueAsync(conn, tx, sessionId, parameterId, formattedVal, rawVal, numericVal);
-                            await UpsertDeviceLatestReadingAsync(conn, tx, deviceId, parameterId, formattedVal, rawVal, syncExecutionTimeUtc);
                         }
 
                         result.RowsWritten++;
@@ -612,10 +416,6 @@ namespace PQM.Infrastructure.Services
                 }
             }
         }
-
-        // =========================================================
-        // HELPER METHODS
-        // =========================================================
 
         private TimeZoneInfo GetDeviceTimeZone(string? timeZoneId)
         {
@@ -679,7 +479,7 @@ namespace PQM.Infrastructure.Services
 
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "SELECT ProfileId FROM Profiles WHERE ObisCode = @obis";
+                cmd.CommandText = "SELECT Id FROM Profiles WHERE ObisCode = @obis";
                 cmd.Parameters.AddWithValue("@obis", obisCode);
                 var existingId = await cmd.ExecuteScalarAsync();
                 if (existingId != null && existingId != DBNull.Value)
@@ -851,29 +651,6 @@ namespace PQM.Infrastructure.Services
             await cmd.ExecuteNonQueryAsync();
         }
 
-        private async Task UpsertDeviceLatestReadingAsync(SqlConnection conn, SqlTransaction tx, int deviceId, int parameterId, string value, string? rawValue, DateTime updatedAt)
-        {
-            using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = @"
-                MERGE DeviceLatestReadings AS target
-                USING (SELECT @did AS DeviceId, @pid AS ParameterId) AS source
-                ON (target.DeviceId = source.DeviceId AND target.ParameterId = source.ParameterId)
-                WHEN MATCHED THEN
-                    UPDATE SET target.Value = @val, target.RawValue = @raw, target.UpdatedAt = @updated
-                WHEN NOT MATCHED THEN
-                    INSERT (DeviceId, ParameterId, Value, RawValue, UpdatedAt)
-                    VALUES (@did, @pid, @val, @raw, @updated);";
-
-            cmd.Parameters.AddWithValue("@did", deviceId);
-            cmd.Parameters.AddWithValue("@pid", parameterId);
-            cmd.Parameters.AddWithValue("@val", (object?)ValueFormatter.CleanValue(value) ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@raw", (object?)rawValue ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@updated", updatedAt);
-
-            await cmd.ExecuteNonQueryAsync();
-        }
-
         private async Task UpsertDeviceProfileSyncStateAsync(SqlConnection conn, SqlTransaction tx, int deviceId, int profileId, DateTime lastReadTimestampUtc, DateTime lastSyncedAt)
         {
             using var cmd = conn.CreateCommand();
@@ -900,55 +677,6 @@ namespace PQM.Infrastructure.Services
         {
             if (double.TryParse(input, out var val)) return val;
             return null;
-        }
-
-        /// <summary>
-        /// Inserts a new DeviceSyncHistory row with Status='Running' and returns its generated Id.
-        /// </summary>
-        private async Task<long> InsertSyncHistoryStartAsync(int deviceId, DateTime startedAt)
-        {
-            using var conn = new SqlConnection(_connectionString);
-            await conn.OpenAsync();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-                INSERT INTO DeviceSyncHistory (DeviceId, StartedAt, Status)
-                OUTPUT INSERTED.Id
-                VALUES (@deviceId, @startedAt, 'Running')";
-            cmd.Parameters.AddWithValue("@deviceId", deviceId);
-            cmd.Parameters.AddWithValue("@startedAt", startedAt);
-            var result = await cmd.ExecuteScalarAsync();
-            return Convert.ToInt64(result);
-        }
-
-        /// <summary>
-        /// Updates an existing DeviceSyncHistory row with completion data.
-        /// </summary>
-        private async Task UpdateSyncHistoryCompletionAsync(
-            long historyId,
-            string status,
-            DateTime completedAt,
-            string? errorMessage,
-            int? profilesRead,
-            int? rowsWritten)
-        {
-            using var conn = new SqlConnection(_connectionString);
-            await conn.OpenAsync();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-                UPDATE DeviceSyncHistory
-                SET Status       = @status,
-                    CompletedAt  = @completedAt,
-                    ErrorMessage = @errorMessage,
-                    ProfilesRead = @profilesRead,
-                    RowsWritten  = @rowsWritten
-                WHERE Id = @id";
-            cmd.Parameters.AddWithValue("@id", historyId);
-            cmd.Parameters.AddWithValue("@status", status);
-            cmd.Parameters.AddWithValue("@completedAt", completedAt);
-            cmd.Parameters.AddWithValue("@errorMessage", (object?)errorMessage ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@profilesRead", (object?)profilesRead ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@rowsWritten", (object?)rowsWritten ?? DBNull.Value);
-            await cmd.ExecuteNonQueryAsync();
         }
     }
 }

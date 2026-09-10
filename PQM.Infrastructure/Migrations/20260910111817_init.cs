@@ -12,25 +12,6 @@ namespace PQM.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "DeviceSyncHistory",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    DeviceId = table.Column<int>(type: "int", nullable: false),
-                    StartedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ProfilesRead = table.Column<int>(type: "int", nullable: true),
-                    RowsWritten = table.Column<int>(type: "int", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DeviceSyncHistory", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "DeviceSyncSchedule",
                 columns: table => new
                 {
@@ -41,7 +22,9 @@ namespace PQM.Infrastructure.Migrations
                     RepeatMode = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     NextRunAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     LastRunAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    LastRunStatus = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    LastRunStatus = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -54,7 +37,9 @@ namespace PQM.Infrastructure.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -70,7 +55,8 @@ namespace PQM.Infrastructure.Migrations
                     Username = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Password = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -99,7 +85,6 @@ namespace PQM.Infrastructure.Migrations
                     Password = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Timeout = table.Column<int>(type: "int", nullable: true),
                     TimeZoneId = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     MeterTypeId = table.Column<int>(type: "int", nullable: true),
                     DeviceSyncScheduleId = table.Column<int>(type: "int", nullable: true)
                 },
@@ -122,16 +107,18 @@ namespace PQM.Infrastructure.Migrations
                 name: "Profiles",
                 columns: table => new
                 {
-                    ProfileId = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ObisCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     FriendlyName = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Category = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     MeterTypeId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Profiles", x => x.ProfileId);
+                    table.PrimaryKey("PK_Profiles", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Profiles_MeterType_MeterTypeId",
                         column: x => x.MeterTypeId,
@@ -145,9 +132,11 @@ namespace PQM.Infrastructure.Migrations
                 {
                     DeviceId = table.Column<int>(type: "int", nullable: false),
                     ProfileId = table.Column<int>(type: "int", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false),
                     LastReadTimestampUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    LastReadEntryIndex = table.Column<int>(type: "int", nullable: true),
-                    LastSyncedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    LastSyncedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -162,7 +151,7 @@ namespace PQM.Infrastructure.Migrations
                         name: "FK_DeviceProfileSyncState_Profiles_ProfileId",
                         column: x => x.ProfileId,
                         principalTable: "Profiles",
-                        principalColumn: "ProfileId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -184,7 +173,8 @@ namespace PQM.Infrastructure.Migrations
                     Unit = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     AggregationType = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsSelected = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ProfileId = table.Column<int>(type: "int", nullable: false),
                     MeterTypeId = table.Column<int>(type: "int", nullable: true)
                 },
@@ -200,7 +190,7 @@ namespace PQM.Infrastructure.Migrations
                         name: "FK_Parameters_Profiles_ProfileId",
                         column: x => x.ProfileId,
                         principalTable: "Profiles",
-                        principalColumn: "ProfileId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -210,10 +200,12 @@ namespace PQM.Infrastructure.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    DeviceId = table.Column<int>(type: "int", nullable: false),
-                    ProfileId = table.Column<int>(type: "int", nullable: false),
                     ReadTime = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    EntryTimestampUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    EntryTimestampUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeviceId = table.Column<int>(type: "int", nullable: false),
+                    ProfileId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -228,65 +220,6 @@ namespace PQM.Infrastructure.Migrations
                         name: "FK_ReadingSessions_Profiles_ProfileId",
                         column: x => x.ProfileId,
                         principalTable: "Profiles",
-                        principalColumn: "ProfileId",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "DeviceEvent",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    DeviceId = table.Column<int>(type: "int", nullable: false),
-                    ParameterId = table.Column<int>(type: "int", nullable: false),
-                    EventTime = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    EventType = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    EventCode = table.Column<int>(type: "int", nullable: false),
-                    RawClock = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    RawValue = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ReadTime = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DeviceEvent", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_DeviceEvent_Devices_DeviceId",
-                        column: x => x.DeviceId,
-                        principalTable: "Devices",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_DeviceEvent_Parameters_ParameterId",
-                        column: x => x.ParameterId,
-                        principalTable: "Parameters",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "DeviceLatestReadings",
-                columns: table => new
-                {
-                    DeviceId = table.Column<int>(type: "int", nullable: false),
-                    ParameterId = table.Column<int>(type: "int", nullable: false),
-                    Value = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    RawValue = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DeviceLatestReadings", x => new { x.DeviceId, x.ParameterId });
-                    table.ForeignKey(
-                        name: "FK_DeviceLatestReadings_Devices_DeviceId",
-                        column: x => x.DeviceId,
-                        principalTable: "Devices",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_DeviceLatestReadings_Parameters_ParameterId",
-                        column: x => x.ParameterId,
-                        principalTable: "Parameters",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -297,11 +230,13 @@ namespace PQM.Infrastructure.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    SessionId = table.Column<long>(type: "bigint", nullable: true),
-                    ParameterId = table.Column<int>(type: "int", nullable: true),
                     Value = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     RawValue = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ValueNumeric = table.Column<double>(type: "float", nullable: true)
+                    ValueNumeric = table.Column<double>(type: "float", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SessionId = table.Column<long>(type: "bigint", nullable: true),
+                    ParameterId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -317,21 +252,6 @@ namespace PQM.Infrastructure.Migrations
                         principalTable: "ReadingSessions",
                         principalColumn: "Id");
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DeviceEvent_DeviceId",
-                table: "DeviceEvent",
-                column: "DeviceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DeviceEvent_ParameterId",
-                table: "DeviceEvent",
-                column: "ParameterId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DeviceLatestReadings_ParameterId",
-                table: "DeviceLatestReadings",
-                column: "ParameterId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DeviceProfileSyncState_ProfileId",
@@ -390,16 +310,7 @@ namespace PQM.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "DeviceEvent");
-
-            migrationBuilder.DropTable(
-                name: "DeviceLatestReadings");
-
-            migrationBuilder.DropTable(
                 name: "DeviceProfileSyncState");
-
-            migrationBuilder.DropTable(
-                name: "DeviceSyncHistory");
 
             migrationBuilder.DropTable(
                 name: "ReadingValues");

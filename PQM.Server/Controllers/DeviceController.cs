@@ -346,7 +346,7 @@ namespace PQM.Server.Controllers
         [HttpPost("{id:int}/sync")]
         public async Task<ActionResult> TriggerDeviceSync(int id,CancellationToken cancellationToken)
         {
-            using var timeoutCts =new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            using var timeoutCts =new CancellationTokenSource(TimeSpan.FromMinutes(60));
 
             using var linkedCts =CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,timeoutCts.Token);
 
@@ -399,13 +399,9 @@ namespace PQM.Server.Controllers
                 // 3. Start Sync
                 // ----------------------------------------------------
 
-                _logger.LogInformation(
-                    "[DeviceController] Sync Now started for Device {DeviceId}.",
-                    id);
+                _logger.LogInformation("[DeviceController] Sync Now started for Device {DeviceId}.",id);
 
-                var result =
-                    await _profileSyncService
-                        .SyncDeviceAllProfilesAsync(id, ct);
+                var result = await _profileSyncService.SyncDeviceAllProfilesAsync(id, ct);
 
                 // ----------------------------------------------------
                 // 4. Return result

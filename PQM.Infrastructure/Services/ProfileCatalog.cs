@@ -47,9 +47,6 @@ namespace PQM.Infrastructure.Services
 
         /// <summary>All profiles merged — used to pre-populate GXDLMSClient.Objects
         /// with any profiles not returned by the meter's association view.</summary>
-        public static Dictionary<string, string> AllProfiles =>
-            TimeSeriesProfiles
-                .Concat(StaticOrMetadataProfiles)
-                .ToDictionary(x => x.Key, x => x.Value);
+        public static Dictionary<string, string> AllProfiles =>TimeSeriesProfiles.Concat(StaticOrMetadataProfiles).ToDictionary(x => x.Key, x => x.Value);
     }
 }

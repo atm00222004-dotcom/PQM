@@ -36,11 +36,7 @@ namespace PQM.Infrastructure.Repositories
 
             device.CreatedAt = DateTime.UtcNow;
 
-            if (string.IsNullOrWhiteSpace(device.Status))
-            {
-                device.Status = "Offline";
-            }
-
+           
             // Resolve MeterType by name if only the name was supplied.
             if (device.MeterTypeId == null &&
                 device.MeterType != null &&

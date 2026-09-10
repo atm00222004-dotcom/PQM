@@ -32,7 +32,7 @@ namespace PQM.Server.Controllers
                 Username = dto.Email.Split('@')[0],
                 Email = dto.Email,
                 Password = dto.Password,
-                CreatedDate = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow
             };
 
             int userId = await _authRepository.AddAsync(user, cancellationToken);

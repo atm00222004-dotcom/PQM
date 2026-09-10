@@ -24,7 +24,8 @@ namespace PQM.Core.Entities
         public string? Unit { get; set; }
         public string? AggregationType { get; set; }
         public bool IsSelected { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         public int ProfileId { get; set; }
         public Profile? Profile { get; set; }

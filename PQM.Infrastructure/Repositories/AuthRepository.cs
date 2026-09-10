@@ -22,7 +22,7 @@ namespace PQM.Infrastructure.Repositories
             if (user == null)
                 throw new ArgumentNullException(nameof(user));
 
-            user.CreatedDate = DateTime.UtcNow;
+            user.CreatedAt = DateTime.UtcNow;
 
             await _db.User.AddAsync(user, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
